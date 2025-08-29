@@ -1,0 +1,5 @@
+{
+  "name": "Social Media Like Tracker",
+  "description": "A practical and engaging tool for social media moderators to track post likes based on a 1-like-per-3 rule across multiple platforms like Facebook, Instagram, TikTok, LinkedIn, and X.",
+  "requestFramePermissions": []
+}
