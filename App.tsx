@@ -7,26 +7,17 @@ import { PlusIcon, InfoIcon } from './components/Icons';
 import RoleSwitcher from './components/RoleSwitcher';
 import RulesModal from './components/RulesModal';
 import ConfirmationModal from './components/ConfirmationModal';
-
-const initialPosts: Record<SocialPlatform, Post[]> = {
-    [SocialPlatform.Facebook]: [
-        { id: 'fb0', imageUrl: null, description: 'ddd', date: '2025-08-29', totalComments: 0, moderatorLikes: 0 },
-        { id: 'fb1', imageUrl: 'https://picsum.photos/seed/fb1/500/300', description: 'Grande successo per il nostro ultimo evento a Milano! Grazie a tutti per aver partecipato.', date: '2025-08-26', totalComments: 17, moderatorLikes: 5 },
-        { id: 'fb2', imageUrl: 'https://picsum.photos/seed/fb2/500/300', description: 'Avviso importante: i nostri uffici rimarranno chiusi per ferie dal 10 al 20 Settembre.', date: '2025-08-25', totalComments: 8, moderatorLikes: 3 },
-    ],
-    [SocialPlatform.Instagram]: [
-        { id: 'ig1', imageUrl: 'https://picsum.photos/seed/ig1/500/500', description: 'Dietro le quinte del nostro ultimo shooting fotografico. Presto grandi novità!', date: '2025-08-27', totalComments: 142, moderatorLikes: 47 },
-    ],
-    [SocialPlatform.TikTok]: [],
-    [SocialPlatform.LinkedIn]: [
-        { id: 'li1', imageUrl: 'https://picsum.photos/seed/li1/600/314', description: 'Siamo lieti di annunciare la nostra nuova partnership strategica. Un grande passo per il futuro della nostra azienda.', date: '2025-08-24', totalComments: 56, moderatorLikes: 19 },
-    ],
-    [SocialPlatform.X]: [],
-};
-
+import { db } from './firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
 const App: React.FC = () => {
-    const [postsByPlatform, setPostsByPlatform] = useState<Record<SocialPlatform, Post[]>>(initialPosts);
+    const [postsByPlatform, setPostsByPlatform] = useState<Record<SocialPlatform, Post[]>>({
+        [SocialPlatform.Facebook]: [],
+        [SocialPlatform.Instagram]: [],
+        [SocialPlatform.TikTok]: [],
+        [SocialPlatform.LinkedIn]: [],
+        [SocialPlatform.X]: [],
+    });
     const [activePlatform, setActivePlatform] = useState<SocialPlatform>(SocialPlatform.Facebook);
     const [isPostFormOpen, setPostFormOpen] = useState(false);
     const [postToEdit, setPostToEdit] = useState<Post | null>(null);
@@ -42,21 +33,45 @@ const App: React.FC = () => {
         }
     }, []);
 
+    useEffect(() => {
+        const q = query(collection(db, "posts"), where("platform", "==", activePlatform));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const posts: Post[] = [];
+            querySnapshot.forEach((doc) => {
+                posts.push({ id: doc.id, ...doc.data() } as Post);
+            });
+            setPostsByPlatform(prev => ({ ...prev, [activePlatform]: posts }));
+            console.log("Data successfully synchronized for all users.");
+        }, (error) => {
+            console.error("Error fetching posts: ", error);
+            console.log("Failed to synchronize data. Please check the console for errors.");
+        });
+
+        return () => unsubscribe();
+    }, [activePlatform]);
+
     const activePosts = useMemo(() => postsByPlatform[activePlatform], [postsByPlatform, activePlatform]);
 
-    const handleAddPost = (newPost: Omit<Post, 'id'>) => {
-        setPostsByPlatform(prev => ({
-            ...prev,
-            [activePlatform]: [{ ...newPost, id: new Date().toISOString() }, ...prev[activePlatform]],
-        }));
-        setPostFormOpen(false);
+    const handleAddPost = async (newPost: Omit<Post, 'id'>) => {
+        try {
+            await addDoc(collection(db, "posts"), { ...newPost, platform: activePlatform });
+            setPostFormOpen(false);
+            console.log("Post added and synchronized for all users.");
+        } catch (error) {
+            console.error("Error adding post: ", error);
+            console.log("Failed to synchronize data. Please check the console for errors.");
+        }
     };
 
-    const handleUpdatePost = (updatedPost: Post) => {
-        setPostsByPlatform(prev => ({
-            ...prev,
-            [activePlatform]: prev[activePlatform].map(p => p.id === updatedPost.id ? updatedPost : p),
-        }));
+    const handleUpdatePost = async (updatedPost: Post) => {
+        try {
+            const postRef = doc(db, "posts", updatedPost.id);
+            await updateDoc(postRef, { ...updatedPost });
+            console.log("Post updated and synchronized for all users.");
+        } catch (error) {
+            console.error("Error updating post: ", error);
+             console.log("Failed to synchronize data. Please check the console for errors.");
+        }
     };
     
     const handleUpdatePostFromForm = (updatedPost: Post) => {
@@ -83,14 +98,17 @@ const App: React.FC = () => {
         setPostToDelete(null);
     };
     
-    const handleDeletePost = () => {
+    const handleDeletePost = async () => {
         if (!postToDelete) return;
-
-        setPostsByPlatform(prev => ({
-            ...prev,
-            [activePlatform]: prev[activePlatform].filter(p => p.id !== postToDelete.id)
-        }));
-        handleCloseDeleteConfirm();
+        try {
+            const postRef = doc(db, "posts", postToDelete.id);
+            await deleteDoc(postRef);
+            handleCloseDeleteConfirm();
+            console.log("Post deleted and synchronized for all users.");
+        } catch (error) {
+            console.error("Error deleting post: ", error);
+            console.log("Failed to synchronize data. Please check the console for errors.");
+        }
     };
 
 
