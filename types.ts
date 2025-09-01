@@ -13,6 +13,7 @@ export enum UserRole {
 
 export interface Post {
     id: string;
+    platform: SocialPlatform;
     imageUrl: string | null;
     description: string;
     date: string;
